@@ -17,7 +17,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Set up Java 17
+      - name: Set up Java
         uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -40,6 +40,27 @@ jobs:
             "build-tools;35.0.0" \
             "build-tools;36.0.0"
 
+      - name: Locate Gradle project
+        id: project
+        shell: bash
+        run: |
+          PROJECT_FILE="$(find . -maxdepth 8 -type f \
+            \( -name settings.gradle -o -name settings.gradle.kts \) \
+            -not -path '*/.gradle/*' \
+            -print -quit)"
+
+          if [ -z "$PROJECT_FILE" ]; then
+            echo "::error::No Gradle settings file found."
+            echo "Repository files:"
+            find . -maxdepth 5 -type f | sort | head -200
+            exit 1
+          fi
+
+          PROJECT_DIR="$(dirname "$PROJECT_FILE")"
+
+          echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+          echo "Found Android Gradle project: $PROJECT_DIR"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
         with:
@@ -48,18 +69,16 @@ jobs:
       - name: Build Debug APK
         shell: bash
         run: |
-          set -o pipefail
+          set -e
+          cd "${{ steps.project.outputs.dir }}"
+
+          echo "Building from: $(pwd)"
 
           if [ -f "./gradlew" ]; then
             chmod +x ./gradlew
             ./gradlew assembleDebug --stacktrace
-          elif [ -f "./settings.gradle" ] || [ -f "./settings.gradle.kts" ]; then
-            gradle assembleDebug --stacktrace
           else
-            echo "::error::Could not find the Gradle project or Gradle wrapper in the repository root."
-            echo "Repository files:"
-            ls -la
-            exit 1
+            gradle assembleDebug --stacktrace
           fi
 
       - name: Upload APK
@@ -67,6 +86,7 @@ jobs:
         if: success()
         with:
           name: app-debug
-          path: "**/build/outputs/apk/debug/*.apk"
+          path: |
+            **/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 7
