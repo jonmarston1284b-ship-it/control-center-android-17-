@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Pixel Control Center</string>
+    <string name="accessibility_service_description">Provides a Pixel-style custom Quick Settings overlay for your device.</string>
+</resources>
