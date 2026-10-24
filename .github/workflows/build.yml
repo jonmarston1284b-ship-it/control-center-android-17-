@@ -23,7 +23,6 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # Also accepts the SDK licenses, so no separate license step is needed
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
 
@@ -47,11 +46,25 @@ jobs:
         run: |
           set -euo pipefail
           cd PixelControlCenter
-          gradle assembleDebug --no-daemon --stacktrace --console=plain
+          gradle assembleDebug --no-daemon --stacktrace --console=plain 2>&1 | tee "$RUNNER_TEMP/gradle.log"
           test -f app/build/outputs/apk/debug/app-debug.apk
 
+      - name: Show Gradle error in job summary
+        if: failure()
+        shell: bash
+        run: |
+          {
+            echo '## Gradle failure'
+            echo '~~~'
+            echo '--- compiler / resource errors ---'
+            grep -E '^e: |error:|AAPT:' "$RUNNER_TEMP/gradle.log" | head -40 || true
+            echo '--- what went wrong ---'
+            sed -n '/^FAILURE:/,/^\* Exception is:/p' "$RUNNER_TEMP/gradle.log" | head -60
+            echo '~~~'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: app-debug
           path: PixelControlCenter/app/build/outputs/apk/debug/app-debug.apk
@@ -60,7 +73,7 @@ jobs:
 
       - name: Upload build reports on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: build-reports
           path: PixelControlCenter/app/build/reports
